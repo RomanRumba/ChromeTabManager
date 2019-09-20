@@ -51,7 +51,7 @@ function listenToTab (tabId,changeInfo, tab){
     if(TimersOnTabs['TabID'+tabId]) { clearTimeout(TimersOnTabs['TabID'+tabId]); }
 
     // set a timeout on the tab
-    TimersOnTabs['TabID'+tabId] = setTimeout(closeTab, defaultTimer * 1000, tabId);
+    TimersOnTabs['TabID'+tabId] = setTimeout(closeTab, defaultTimer * 60 * 1000, tabId);
 }
 
 /* Usage : closeTab(tabId)
