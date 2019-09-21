@@ -3,13 +3,50 @@
     "name": "Chrome tab manager",
     "description": "An extension that helps you manage your tabs with special features",
     "version": "0.1",
+    "permissions": [
+        "tabs","storage","activeTab","<all_urls>"
+    ],
     "background": {
         "scripts": [
             "background/background.js"
         ],
         "persistent": false
     },
-    "permissions": [
-        "tabs","storage"
-    ]
-  }
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content/content.js"]
+        }
+    ],
+    "web_accessible_resources": [
+        "img/redprio.png",
+        "img/yellowprio.png",
+        "img/greenprio.png"
+    ],
+    "commands": {
+        "mark-page-high-priority": {
+          "suggested_key": {
+            "default": "Ctrl+Shift+1",
+            "mac": "Command+Shift+1"
+          },
+          "description": "Marks the page that the user is on to a high priority",
+          "global": true
+        },
+        "mark-page-med-priority": {
+            "suggested_key": {
+              "default": "Ctrl+Shift+2",
+              "mac": "Command+Shift+2"
+            },
+            "description": "Marks the page that the user is on to a medium priority",
+            "global": true
+        },
+        "mark-page-low-priority": {
+            "suggested_key": {
+              "default": "Ctrl+Shift+3",
+              "mac": "Command+Shift+3"
+            },
+            "description": "Marks the page that the user is on to a low priority",
+            "global": true
+        }
+    }
+}
