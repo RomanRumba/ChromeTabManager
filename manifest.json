@@ -47,6 +47,14 @@
             },
             "description": "Marks the page that the user is on to a low priority",
             "global": true
+        },
+        "remove-url-priority": {
+            "suggested_key": {
+              "default": "Ctrl+Shift+4",
+              "mac": "Command+Shift+4"
+            },
+            "description": "Removes the priority from the page",
+            "global": true
         }
     }
 }

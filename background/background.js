@@ -16,6 +16,7 @@ const TimersOnTabs = {};
 const _markPageHigh = "mark-page-high-priority";
 const _markPageMed = "mark-page-med-priority";
 const _markPageLow = "mark-page-low-priority";
+const _removeUrlPriority = "remove-url-priority";
 
 //#endregion
 
@@ -35,28 +36,77 @@ function GetDefaultTime() {
     return defaultTimer;
 }
 
-/* Usage : clearTimeoutOnTab(tabId)
+/* Usage : ClearTimeoutOnTab(tabId)
      For : - tabId is an integer indicating what tab you wish to clear the timeout function from
    After : checks if there is a settimeout on the tab whose id= tabId, if it exists then we clear it.*/
-function clearTimeoutOnTab(tabId){
+function ClearTimeoutOnTab(tabId){
     if(TimersOnTabs['TabID'+tabId]) { 
         clearTimeout(TimersOnTabs['TabID'+tabId]); 
         delete TimersOnTabs['TabID'+tabId];
     }
 }
 
-/* Usage : closeTab(tabId)
+/* Usage : CloseTab(tabId)
      For : - tabId is an integer that indicates which tab needs to be closed
    After : Closes the tab whose id = tabId if it is not active, if it active then it's time to close get reset */
-function closeTab(tabId){
+function CloseTab(tabId){
     chrome.tabs.get(tabId, (tab) => {
         // if its the active tab then we just set another default timer on 
         if(tab.active){
-            TimersOnTabs['TabID'+tabId] = setTimeout(closeTab, GetDefaultTime() * 60 * 1000, tabId);
+            TimersOnTabs['TabID'+tabId] = setTimeout(CloseTab, GetDefaultTime() * 60 * 1000, tabId);
             return;
         }
         delete TimersOnTabs['TabID'+tabId];
         chrome.tabs.remove(tabId);
+    });
+}
+
+/* Usage : SetNewPriorityOnWebsite(tabId,tabUrl,color)
+     For : - tabId is an interger that indicates which tab is the website on
+           - tabUrl is a string that indicates what url is the user on
+           - color is a string can be ether 'redprio.png' , 'yellowprio.png' , 'greenprio.png'
+   After : Clear the timeout on the given tabId and changes the favIcon to the desired color 
+           alsong with saving the url and it's priority in any Chrome browser that the user is logged into.*/
+function SetNewPriorityOnWebsite(tabId,tabUrl,color){
+    ClearTimeoutOnTab(tabId);
+    chrome.tabs.sendMessage(tabId, {color: color});
+    chrome.storage.sync.get(['CTMS_urls'], function(result) {
+        let userPrioUrls = [];
+        if(!result){ 
+            userPrioUrls = result; 
+
+            userPrioUrls.forEach(crrurl => {
+                if(crrurl.url === tabUrl){
+                   userPrioUrls.remove(crrurl);
+                   return;
+                }
+            });
+        }
+        userPrioUrls.push({
+            url : tabUrl,
+            color : "redprio.png"
+        });
+
+        chrome.storage.sync.set({'CTMS_urls': userPrioUrls});
+    });
+}
+
+/* Usage : RemovePriorityFromWebsite(url)
+     For : - url is a string of the url you wish to remove from priorties
+   After : Removes the priority from the specified url if it had a priority. */
+function RemovePriorityFromWebsite(url) {
+    chrome.storage.sync.get(['CTMS_urls'], function(result) {
+        let userPrioUrls = [];
+        if(!result){ 
+            userPrioUrls = result;
+            userPrioUrls.forEach(crrurl => {
+                if(crrurl.url === url){
+                   userPrioUrls.remove(crrurl);
+                   return;
+                }
+            });
+        }
+        chrome.storage.sync.set({'CTMS_urls': userPrioUrls});
     });
 }
 
@@ -77,34 +127,29 @@ function listenToTab (tabId,changeInfo, tab){
     if(!('status' in changeInfo)){ return; }
     // I dont fck know why i cant make this into one line, it just stops working when its in a one if statement 
     if(changeInfo.status !== "complete"){ return; }
-
     // Check if the user has the url set a priority on it  
     chrome.storage.sync.get(['CTMS_urls'], (result) => {
-        // fetch the urs that the user has set priorities to 
-        if(result){ return; }
-
-        /*
-         * For each url in result check if the current url is the same url
-         * as the one that the user opened, if it was then assign it a priority that the user has specified to it
-         */
-        result.forEach(crrurl => {
-            if(crrurl.url === tab.url){
-                // change fav icon
+        // fetch the urs that the user has set priorities to
+        if('CTMS_urls' in result){
+            /* For each url in result check if the current url is the same url as the one that the user opened, 
+             * if it was then assign it a priority that the user has specified to it. */
+            for(let i = 0; i < result.CTMS_urls.length; i++){
+                if(result.CTMS_urls[i].url === tab.url){
+                    chrome.tabs.sendMessage(tab.id, {color: result.CTMS_urls[i].color});
+                    return;
+                }
             }
-        });
-
+        }
+        // if timeout already exists we remove it 
+        if(TimersOnTabs['TabID'+tabId]) { clearTimeout(TimersOnTabs['TabID'+tabId]); } 
+        // set a timeout on the tab
+        TimersOnTabs['TabID'+tabId] = setTimeout(CloseTab, GetDefaultTime() * 60 * 1000, tabId);
     });
-
-    // if timeout already exists we remove it 
-    if(TimersOnTabs['TabID'+tabId]) { clearTimeout(TimersOnTabs['TabID'+tabId]); }
-
-    // set a timeout on the tab
-    TimersOnTabs['TabID'+tabId] = setTimeout(closeTab, GetDefaultTime() * 60 * 1000, tabId);
 }
 
 /* A listener that will listen to when a tab is closed, if closed 
    then we remove the corresponding settimeout along with TimersOnTabs */
-chrome.tabs.onRemoved.addListener((tabid, removed) => { clearTimeoutOnTab(tabid); })
+chrome.tabs.onRemoved.addListener((tabid, removed) => { ClearTimeoutOnTab(tabid); })
 
 //#endregion
 
@@ -115,17 +160,17 @@ chrome.tabs.onRemoved.addListener((tabid, removed) => { clearTimeoutOnTab(tabid)
 chrome.commands.onCommand.addListener((command) =>{
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) =>{
         const currentTab = tabs[0];
-
         if(command === _markPageHigh){
-            clearTimeoutOnTab(currentTab.id);
-            chrome.tabs.sendMessage(currentTab.id, {color: "redprio.png"});
+            SetNewPriorityOnWebsite(currentTab.id,currentTab.url,"redprio.png");
         }
         else if(command === _markPageMed) {
-            clearTimeoutOnTab(currentTab.id);
-            chrome.tabs.sendMessage(currentTab.id, {color: "yellowprio.png"});
+            SetNewPriorityOnWebsite(currentTab.id,currentTab.url,"yellowprio.png");
         }
         else if(command === _markPageLow) {
-            chrome.tabs.sendMessage(currentTab.id, {color: "greenprio.png"});
+            SetNewPriorityOnWebsite(currentTab.id,currentTab.url,"greenprio.png");
+        }
+        else if(command === _removeUrlPriority){
+            RemovePriorityFromWebsite(currentTab.url);
         }
     });
 });
